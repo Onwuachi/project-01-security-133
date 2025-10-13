@@ -1,18 +1,38 @@
 name: Label Issues (Script Injection Example)
 on:
   issues:
-    types:
-      - opened
+    types: [opened]
+
+# Give this workflow explicit permission to write issue metadata (labels)
+permissions:
+  issues: write
+
 jobs:
   assign-label:
     runs-on: ubuntu-latest
     steps:
-      - name: Assign label
+      - name: Assign label based on title
+        # minimal env to make the script readable; the token stays masked
         env:
           TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          GITHUB_API_URL: https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/labels
         run: |
-          if [[ "$TITLE" == *"bug"* ]]; then
-          echo "Issue is about a bug!"
+          # normalize to lowercase for case-insensitive matching
+          TITLE_LOWER=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]')
+          # safe substring match for "bug" in the issue title (case-insensitive)
+          if [[ "$TITLE_LOWER" == *"bug"* ]]; then
+            echo "Issue is about a bug! Adding label..."
+            # Use the token directly in the header. The token is masked by Actions logs.
+            curl -X POST \
+              --url "$GITHUB_API_URL" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/json" \
+              -d '{"labels":["bug"]}' \
+              --fail
           else
-          echo "Issue is not about a bug"
+            echo "Issue is not about a bug"
           fi
